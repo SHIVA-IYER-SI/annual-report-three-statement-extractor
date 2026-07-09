@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: annual-report-three-statement-extractor
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: JOB_TTL_MINUTES
+        value: "60"
+      - key: JOB_WORKERS
+        value: "1"
