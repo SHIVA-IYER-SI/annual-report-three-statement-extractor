@@ -1,0 +1,114 @@
+[
+  {
+    "check_id": "IS-01",
+    "check_name": "Revenue components to total",
+    "formula_or_test": "SUM included revenue components - reported Revenue from Operations",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "IS-02",
+    "check_name": "Employee-benefit components to total",
+    "formula_or_test": "SUM complete employee components - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical when full note extracted"
+  },
+  {
+    "check_id": "IS-03",
+    "check_name": "Other-expense components to total",
+    "formula_or_test": "SUM complete other-expense components - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical when full note extracted"
+  },
+  {
+    "check_id": "IS-04",
+    "check_name": "D&A components to total",
+    "formula_or_test": "SUM D&A components - reported D&A",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "IS-05",
+    "check_name": "EBITDA bridge",
+    "formula_or_test": "Revenue - operating expenses - EBITDA",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "IS-06",
+    "check_name": "EBIT bridge",
+    "formula_or_test": "EBITDA - D&A - operating impairment - EBIT",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "IS-07",
+    "check_name": "Other income components",
+    "formula_or_test": "SUM complete other-income components - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical when full note extracted"
+  },
+  {
+    "check_id": "IS-08",
+    "check_name": "Finance cost components",
+    "formula_or_test": "SUM complete finance-cost components - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical when full note extracted"
+  },
+  {
+    "check_id": "IS-09",
+    "check_name": "PBT bridge",
+    "formula_or_test": "Calculated PBT - reported PBT",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "IS-10",
+    "check_name": "Tax bridge",
+    "formula_or_test": "SUM tax components - total tax",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "IS-11",
+    "check_name": "PAT bridge",
+    "formula_or_test": "PBT - total tax - PAT",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "IS-12",
+    "check_name": "PAT attribution",
+    "formula_or_test": "Parent PAT + NCI PAT - PAT",
+    "tolerance": "0.01",
+    "severity": "Critical when attribution disclosed"
+  },
+  {
+    "check_id": "IS-13",
+    "check_name": "OCI bridge",
+    "formula_or_test": "SUM OCI components - total OCI",
+    "tolerance": "0.01",
+    "severity": "Critical when detailed OCI extracted"
+  },
+  {
+    "check_id": "IS-14",
+    "check_name": "Total comprehensive income",
+    "formula_or_test": "PAT + OCI - total comprehensive income",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "IS-15",
+    "check_name": "EPS reasonableness",
+    "formula_or_test": "PAT attributable to parent / weighted basic shares versus Basic EPS after unit adjustment",
+    "tolerance": "Documented rounding",
+    "severity": "Review"
+  },
+  {
+    "check_id": "IS-16",
+    "check_name": "First-year growth blank",
+    "formula_or_test": "No growth percentage without a prior model year",
+    "tolerance": "Exact",
+    "severity": "Formatting"
+  }
+]

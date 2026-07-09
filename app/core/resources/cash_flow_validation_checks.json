@@ -1,0 +1,107 @@
+[
+  {
+    "check_id": "CF-01",
+    "check_name": "PBT link test",
+    "formula_or_test": "CF PBT versus IS PBT",
+    "tolerance": "0.01",
+    "severity": "Convert to link only when all applicable years match"
+  },
+  {
+    "check_id": "CF-02",
+    "check_name": "Adjustment exact-match tests",
+    "formula_or_test": "Each IS-derived adjustment versus reported CF line",
+    "tolerance": "0.01",
+    "severity": "No partial-row conversion"
+  },
+  {
+    "check_id": "CF-03",
+    "check_name": "Operating profit before WC",
+    "formula_or_test": "PBT + adjustments - reported subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-04",
+    "check_name": "BS movement tests",
+    "formula_or_test": "Asset: prior-current; liability: current-prior versus reported CF movement",
+    "tolerance": "0.01",
+    "severity": "Use only when every applicable year matches"
+  },
+  {
+    "check_id": "CF-05",
+    "check_name": "Cash generated from operations",
+    "formula_or_test": "Operating before WC + WC movements - reported subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-06",
+    "check_name": "Net CFO",
+    "formula_or_test": "Cash generated + taxes paid/refunds - reported Net CFO",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-07",
+    "check_name": "Net CFI",
+    "formula_or_test": "SUM investing lines - reported Net CFI",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-08",
+    "check_name": "Net CFF",
+    "formula_or_test": "SUM financing lines - reported Net CFF",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-09",
+    "check_name": "Three-section net movement",
+    "formula_or_test": "Net CFO + Net CFI + Net CFF",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-10",
+    "check_name": "Total net change",
+    "formula_or_test": "Three-section movement + FX + acquisition cash",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-11",
+    "check_name": "Opening cash roll-forward",
+    "formula_or_test": "Current-year opening cash - prior-year closing cash",
+    "tolerance": "0.01",
+    "severity": "Critical from second model year"
+  },
+  {
+    "check_id": "CF-12",
+    "check_name": "Closing cash roll-forward",
+    "formula_or_test": "Opening cash + total net change - closing cash",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-13",
+    "check_name": "BS net-cash reconciliation",
+    "formula_or_test": "Gross cash less only explicitly disclosed cash-credit/overdraft components",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-14",
+    "check_name": "CF versus BS closing",
+    "formula_or_test": "CF closing cash - BS net cash",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "CF-15",
+    "check_name": "First-year treatment",
+    "formula_or_test": "First-year CF activity/opening/net change blank; closing linked to BS when prior year unavailable",
+    "tolerance": "Exact",
+    "severity": "Structural"
+  }
+]

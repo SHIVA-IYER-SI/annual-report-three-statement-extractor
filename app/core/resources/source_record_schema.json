@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Annual Report Source Record",
+  "type": "object",
+  "required": [
+    "company",
+    "scope",
+    "financial_year",
+    "statement",
+    "original_label",
+    "source_file",
+    "page",
+    "status"
+  ],
+  "properties": {
+    "company": {
+      "type": "string"
+    },
+    "scope": {
+      "enum": [
+        "consolidated",
+        "standalone"
+      ]
+    },
+    "financial_year": {
+      "type": "string"
+    },
+    "statement": {
+      "enum": [
+        "income_statement",
+        "balance_sheet",
+        "cash_flow",
+        "note",
+        "segment",
+        "other"
+      ]
+    },
+    "note_number": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "table_title": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "original_label": {
+      "type": "string"
+    },
+    "canonical_key": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "original_value": {
+      "type": [
+        "number",
+        "string",
+        "null"
+      ]
+    },
+    "original_unit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "normalised_value_crore": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "source_file": {
+      "type": "string"
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "bounding_box_or_table_coordinates": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "REPORTED",
+        "REPORTED_RESTATED",
+        "CALCULATED_FROM_DISCLOSED_COMPONENTS",
+        "CALCULATED_RESIDUAL",
+        "CROSS_STATEMENT_LINK",
+        "DISCLOSED_ZERO",
+        "MISSING_NOT_DISCLOSED",
+        "AMBIGUOUS_REVIEW_REQUIRED",
+        "SUPERSEDED_COMPARATIVE"
+      ]
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "selected_for_model": {
+      "type": "boolean"
+    },
+    "review_note": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Upload annual reports from one or multiple companies and generate separate source-backed historical three-statement Excel workbooks." />
+  <title>Annual Report Three-Statement Extractor</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <main class="page shell">
+    <header class="pageHeader">
+      <div>
+        <span class="eyebrow">The numbers are awake</span>
+        <h1>Historical three-statement extraction</h1>
+        <p>Upload 1–10 annual reports or XBRL files. The tool detects the companies, groups matching reports, and creates a separate normalized Excel workbook for each company.</p>
+      </div>
+      <div class="headerTools">
+        <div class="privacyPill">Temporary processing · auto-delete</div>
+        <a class="button secondary" href="mailto:shivaiyer79@gmail.com?subject=Annual%20Report%20Extractor%20-%20Issue%20or%20Suggestion">Contact / Suggestion</a>
+        <a class="button secondary" href="https://github.com/SHIVA-IYER-SI/annual-report-three-statement-extractor" target="_blank" rel="noopener noreferrer">Download your own</a>
+      </div>
+    </header>
+
+    <section class="summaryStrip" aria-label="Blueprint summary">
+      <div><strong id="lineItemTotal">437</strong><span>canonical line items</span></div>
+      <div><strong id="checkTotal">58</strong><span>validation checks</span></div>
+      <div><strong>3</strong><span>exact sheets per workbook</span></div>
+      <div><strong>10</strong><span>maximum source files</span></div>
+    </section>
+
+    <section class="card uploadCard">
+      <form id="extractionForm" class="form">
+        <div class="formGrid">
+          <label>
+            Accounting scope for this batch
+            <select id="scope" name="scope">
+              <option value="CONSOLIDATED" selected>Consolidated</option>
+              <option value="STANDALONE">Standalone</option>
+            </select>
+          </label>
+          <label>
+            Input reporting unit
+            <select id="fallbackUnit" name="fallback_unit">
+              <option value="crore" selected>Auto-detect; assume crore if not printed</option>
+              <option value="million">Million</option>
+              <option value="lakh">Lakh</option>
+              <option value="thousand">Thousand</option>
+              <option value="rupee">Rupees</option>
+            </select>
+          </label>
+          <label class="fullWidth">
+            Annual reports / XBRL files
+            <input id="files" name="files" type="file" accept=".pdf,.xml,.xhtml,.html,.htm" multiple required />
+            <small>Select 1–10 files. They may belong to one company or multiple companies. Each file may be up to 250 MB.</small>
+          </label>
+        </div>
+        <div id="fileList" class="fileList" aria-live="polite"></div>
+        <p class="helper">Company names are detected from each report. Matching reports are combined; different companies receive separate workbooks. Low-confidence detections are isolated rather than silently mixed.</p>
+        <div class="formActions">
+          <button id="submitButton" class="button primary" type="submit">Analyze annual reports</button>
+          <span class="supportText">1–10 files · PDF, XML, XHTML · 250 MB maximum per file</span>
+        </div>
+      </form>
+    </section>
+
+    <section id="statusSection" class="card statusCard hidden" aria-live="polite">
+      <div class="runHeader">
+        <div>
+          <span class="eyebrow">Current extraction</span>
+          <h2 id="statusTitle">Preparing files</h2>
+          <p id="statusMessage">Waiting to begin.</p>
+        </div>
+        <span id="statusBadge" class="statusBadge notReady">Not ready</span>
+      </div>
+      <div class="progressTrack" aria-hidden="true"><div id="progressBar" class="progressBar"></div></div>
+      <div class="progressMeta"><span id="progressText">0%</span><span id="expiryText"></span></div>
+      <div id="errorBox" class="errorBox hidden"></div>
+    </section>
+
+    <section id="resultSection" class="resultSection hidden">
+      <div class="runHeader">
+        <div>
+          <span class="eyebrow">Generated outputs</span>
+          <h2 id="resultTitle">Company workbooks</h2>
+          <p id="resultMeta"></p>
+        </div>
+        <div class="actions">
+          <span id="resultBadge" class="statusBadge"></span>
+          <a id="downloadAllButton" class="button primary hidden" href="#" download>Download all workbooks</a>
+        </div>
+      </div>
+
+      <div id="groupingNotice" class="groupingNotice"></div>
+      <div id="artifactResults" class="artifactResults"></div>
+
+      <details class="card detailsCard">
+        <summary>Blueprint validation library</summary>
+        <p>The packaged checklist resources are retained unchanged and grouped below by statement.</p>
+        <div id="blueprintChecks" class="blueprintChecks"></div>
+      </details>
+
+      <div class="destructiveRow">
+        <button id="deleteButton" class="button danger" type="button">Delete uploaded files and outputs now</button>
+        <span>The server also deletes the temporary job automatically after the displayed expiry time.</span>
+      </div>
+    </section>
+
+    <footer class="appFooter">
+      <span>Found an issue or have a suggestion?</span>
+      <a href="mailto:shivaiyer79@gmail.com?subject=Annual%20Report%20Extractor%20-%20Issue%20or%20Suggestion">Contact Shiva</a>
+      <span>·</span>
+      <a href="https://github.com/SHIVA-IYER-SI/annual-report-three-statement-extractor" target="_blank" rel="noopener noreferrer">Download your own</a>
+    </footer>
+  </main>
+
+  <div id="drawerBackdrop" class="drawerBackdrop hidden" role="presentation">
+    <aside class="drawer" role="dialog" aria-modal="true" aria-label="Workbook preview">
+      <header class="drawerHeader">
+        <div>
+          <span class="eyebrow">Workbook artifact</span>
+          <h2 id="drawerTitle">Workbook preview</h2>
+        </div>
+        <button id="closeDrawer" class="button secondary" type="button">Close</button>
+      </header>
+      <div id="previewSummary" class="previewSummary"></div>
+      <nav id="tabs" class="tabs" aria-label="Workbook sheets"></nav>
+      <div class="tableWrap previewArea">
+        <table class="previewTable">
+          <thead id="previewHead"></thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+      <footer class="drawerFooter">
+        <a id="drawerDownload" class="button primary" href="#" download>Download Excel</a>
+      </footer>
+    </aside>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

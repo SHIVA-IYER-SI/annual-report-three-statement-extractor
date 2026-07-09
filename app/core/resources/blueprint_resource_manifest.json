@@ -1,0 +1,74 @@
+{
+  "blueprint_version": "1.0",
+  "blueprint_zip_sha256": "1dc7653d23a6c8f195520ae5196a87aaf7fd287394aa3bb2e80213ee51b47073",
+  "resources": [
+    {
+      "source_path": "00_MASTER/OUTPUT_CONTRACT.json",
+      "runtime_path": "app/services/statement_extraction/resources/output_contract.json",
+      "sha256": "37cc795fa398c45fe44b78b4604edbde8a62283782ca03f3b9d5d4e2db50af5e",
+      "bytes": 1212
+    },
+    {
+      "source_path": "04_FORMATTING_CODE/style_config.json",
+      "runtime_path": "app/services/statement_extraction/resources/style_config.json",
+      "sha256": "43f1181edb38dc2dbc1a5e7dca992c7238ee7b6ce4817ebde5f50f042b390722",
+      "bytes": 1464
+    },
+    {
+      "source_path": "04_FORMATTING_CODE/input_payload_schema.json",
+      "runtime_path": "app/services/statement_extraction/resources/input_payload_schema.json",
+      "sha256": "26c9df82bad38801e9b210c8195975c470c848e5a1e87d84bb272c4c92f4106b",
+      "bytes": 1812
+    },
+    {
+      "source_path": "06_QA_AND_AUDIT/source_record_schema.json",
+      "runtime_path": "app/services/statement_extraction/resources/source_record_schema.json",
+      "sha256": "1f01e89142c65478a5da3b298aeaf95d94599311bd1c6aa75999bead995b521e",
+      "bytes": 2096
+    },
+    {
+      "source_path": "01_INCOME_STATEMENT/income_statement_line_item_universe.json",
+      "runtime_path": "app/services/statement_extraction/resources/income_statement_line_item_universe.json",
+      "sha256": "68a795ee91514b7b3c55dba3b7f6c841b02c3500433822c2158b16f4f36aea98",
+      "bytes": 137910
+    },
+    {
+      "source_path": "02_BALANCE_SHEET/balance_sheet_line_item_universe.json",
+      "runtime_path": "app/services/statement_extraction/resources/balance_sheet_line_item_universe.json",
+      "sha256": "5fc556aaa0f1aff9344d08ee6b99d4b24a025e87077405e6e995049c39043bb3",
+      "bytes": 163429
+    },
+    {
+      "source_path": "03_CASH_FLOW_STATEMENT/cash_flow_line_item_universe.json",
+      "runtime_path": "app/services/statement_extraction/resources/cash_flow_line_item_universe.json",
+      "sha256": "7f6c30453daca30fff1764cc83b9755ce42ac5b80bcd7493faf42a86f7bdff3c",
+      "bytes": 73970
+    },
+    {
+      "source_path": "01_INCOME_STATEMENT/income_statement_validation_checks.json",
+      "runtime_path": "app/services/statement_extraction/resources/income_statement_validation_checks.json",
+      "sha256": "db16019f4c2b752155d9f05a7e30f975db20cdb13e9af895f91575b9d533f36f",
+      "bytes": 3341
+    },
+    {
+      "source_path": "02_BALANCE_SHEET/balance_sheet_validation_checks.json",
+      "runtime_path": "app/services/statement_extraction/resources/balance_sheet_validation_checks.json",
+      "sha256": "38d197af9984c43947e85100353e98f5b0fb32fa7931553e08786ce19618a263",
+      "bytes": 5279
+    },
+    {
+      "source_path": "03_CASH_FLOW_STATEMENT/cash_flow_validation_checks.json",
+      "runtime_path": "app/services/statement_extraction/resources/cash_flow_validation_checks.json",
+      "sha256": "e4bd526ba230e38bf04f31e4a757afe868e49b77b35b2964e13b342422413792",
+      "bytes": 3177
+    }
+  ],
+  "counts": {
+    "income_statement_mapping_entries": 159,
+    "balance_sheet_mapping_entries": 193,
+    "cash_flow_mapping_entries": 85,
+    "income_statement_validation_checks": 16,
+    "balance_sheet_validation_checks": 27,
+    "cash_flow_validation_checks": 15
+  }
+}

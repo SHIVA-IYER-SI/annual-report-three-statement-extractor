@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Historical Three-Statement Builder Payload",
+  "type": "object",
+  "required": ["company_name", "years", "statements"],
+  "properties": {
+    "company_name": {"type": "string"},
+    "scope": {"enum": ["consolidated", "standalone"]},
+    "currency_unit": {"const": "INR_crore"},
+    "years": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    },
+    "statements": {
+      "type": "object",
+      "required": ["INCOME STATEMENT", "BALANCE SHEET", "CASH FLOW STATEMENT"],
+      "additionalProperties": false,
+      "properties": {
+        "INCOME STATEMENT": {"$ref": "#/$defs/rows"},
+        "BALANCE SHEET": {"$ref": "#/$defs/rows"},
+        "CASH FLOW STATEMENT": {"$ref": "#/$defs/rows"}
+      }
+    }
+  },
+  "$defs": {
+    "rows": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/row"}
+    },
+    "row": {
+      "type": "object",
+      "required": ["key", "label", "row_type", "value_type"],
+      "properties": {
+        "key": {"type": "string"},
+        "label": {"type": "string"},
+        "row_type": {
+          "enum": ["section_header", "subgroup_header", "component", "subtotal", "major_total", "supplement_header", "metric", "error_check"]
+        },
+        "value_type": {"enum": ["currency", "percent", "count", "text", "none"]},
+        "hierarchy_level": {"type": "integer", "minimum": 0, "maximum": 4},
+        "include": {"type": "boolean"},
+        "has_included_children": {"type": "boolean"},
+        "blank_after": {"type": "boolean"},
+        "values": {"type": "object", "additionalProperties": {"type": ["number", "string", "null"]}},
+        "formula": {"type": ["object", "null"]},
+        "sources": {"type": "object"}
+      }
+    }
+  }
+}

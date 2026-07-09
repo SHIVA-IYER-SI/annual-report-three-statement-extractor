@@ -1,0 +1,191 @@
+[
+  {
+    "check_id": "BS-01",
+    "check_name": "Non-current investments",
+    "formula_or_test": "SUM complete investment components - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical when detailed note extracted"
+  },
+  {
+    "check_id": "BS-02",
+    "check_name": "Other non-current financial assets",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-03",
+    "check_name": "Other non-current assets",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-04",
+    "check_name": "Total non-current assets",
+    "formula_or_test": "SUM included non-current assets - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-05",
+    "check_name": "Inventories",
+    "formula_or_test": "SUM inventory components incl. provision - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-06",
+    "check_name": "Trade receivables",
+    "formula_or_test": "Gross + ECL - Net",
+    "tolerance": "0.01",
+    "severity": "Critical when disclosed"
+  },
+  {
+    "check_id": "BS-07",
+    "check_name": "Cash and cash equivalents",
+    "formula_or_test": "SUM cash components - reported cash",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-08",
+    "check_name": "Other bank balances",
+    "formula_or_test": "SUM components - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-09",
+    "check_name": "Other current financial assets",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-10",
+    "check_name": "Other current assets",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-11",
+    "check_name": "Total current assets",
+    "formula_or_test": "SUM current asset lines - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-12",
+    "check_name": "Total assets",
+    "formula_or_test": "Non-current assets + current assets - total assets",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-13",
+    "check_name": "Total equity",
+    "formula_or_test": "SUM non-duplicative equity lines - total equity",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-14",
+    "check_name": "Non-current borrowings",
+    "formula_or_test": "Gross debt + deductions - net debt",
+    "tolerance": "0.01",
+    "severity": "Critical when disclosed"
+  },
+  {
+    "check_id": "BS-15",
+    "check_name": "Current maturities duplication",
+    "formula_or_test": "Current maturities included once only",
+    "tolerance": "Exact",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-16",
+    "check_name": "Lease liability classification",
+    "formula_or_test": "Current and non-current lease liabilities separate from other financial liabilities when separately presented",
+    "tolerance": "Exact",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-17",
+    "check_name": "Other non-current financial liabilities",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-18",
+    "check_name": "Non-current provisions",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-19",
+    "check_name": "Total non-current liabilities",
+    "formula_or_test": "SUM lines - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-20",
+    "check_name": "Current borrowings",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-21",
+    "check_name": "Trade payables",
+    "formula_or_test": "MSME + other components - total",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-22",
+    "check_name": "Other current financial liabilities",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-23",
+    "check_name": "Other current liabilities",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-24",
+    "check_name": "Current provisions",
+    "formula_or_test": "SUM components - subtotal",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-25",
+    "check_name": "Total current liabilities",
+    "formula_or_test": "SUM lines - reported total",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-26",
+    "check_name": "Total liabilities",
+    "formula_or_test": "NCL + CL - total liabilities",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  },
+  {
+    "check_id": "BS-27",
+    "check_name": "Balance equation",
+    "formula_or_test": "Total Assets - Total Equity and Liabilities",
+    "tolerance": "0.01",
+    "severity": "Critical"
+  }
+]

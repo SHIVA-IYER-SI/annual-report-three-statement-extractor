@@ -1,0 +1,49 @@
+{
+  "workbook": {
+    "sheet_order": ["INCOME STATEMENT", "BALANCE SHEET", "CASH FLOW STATEMENT"],
+    "historical_only": true,
+    "gridlines": false,
+    "freeze_panes": "C3"
+  },
+  "columns": {
+    "spacer_A": 3,
+    "labels_B": 62,
+    "historical_year_columns": 16
+  },
+  "headers": {
+    "row_1_label": "ACTUAL",
+    "actual_fill": "#C6EFCE",
+    "actual_font_color": "#000000",
+    "year_row": 2,
+    "year_font_bold": true
+  },
+  "body": {
+    "font": "Arial",
+    "font_size": 10,
+    "background": "#FFFFFF",
+    "positive_font_color": "#000000",
+    "negative_font_color": "#FF0000"
+  },
+  "number_formats": {
+    "currency": "\"₹\" #,##0.00;[Red]-\"₹\" #,##0.00;\"₹\" 0.00",
+    "percent": "0.00%;[Red]-0.00%;0.00%",
+    "count": "#,##0.00;[Red]-#,##0.00;0.00",
+    "zero_as_dash": false,
+    "negative_parentheses": false,
+    "percent_values_italic": true
+  },
+  "row_types": {
+    "section_header": {"bold": true, "fill": "#FFFFFF"},
+    "subgroup_header": {"bold": true, "top_border": "thin"},
+    "component": {"bold": false, "indent_from_hierarchy": true},
+    "subtotal": {"bold": true, "top_border": "thin"},
+    "major_total": {"bold": true, "top_border": "medium"},
+    "supplement_header": {"bold_label": true, "fill": "#D9D9D9"},
+    "metric": {"bold": false},
+    "error_check": {"bold": true, "top_border": "thin"}
+  },
+  "spacing": {
+    "blank_row_between_unrelated_groups": 1,
+    "blank_between_opening_change_closing": 0
+  }
+}

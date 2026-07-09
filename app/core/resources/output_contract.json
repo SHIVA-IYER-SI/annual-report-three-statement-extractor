@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "scope": "historical_three_statement_only",
+  "default_accounting_scope": "consolidated",
+  "default_currency_unit": "INR_crore",
+  "sheets": [
+    "INCOME STATEMENT",
+    "BALANCE SHEET",
+    "CASH FLOW STATEMENT"
+  ],
+  "no_forecast": true,
+  "dynamic_rows": true,
+  "missing_value_policy": "blank_unless_explicitly_disclosed_zero",
+  "row_inclusion": "disclosed_in_any_selected_year_or_required_supported_formula",
+  "formula_tolerance_crore": 0.01,
+  "view": {
+    "gridlines": false,
+    "freeze_panes": "C3"
+  },
+  "style": {
+    "actual_fill": "#C6EFCE",
+    "supplement_fill": "#D9D9D9",
+    "font": "Arial",
+    "font_size": 10,
+    "currency_format": "\"₹\" #,##0.00;[Red]-\"₹\" #,##0.00;\"₹\" 0.00",
+    "percent_format": "0.00%;[Red]-0.00%;0.00%",
+    "count_format": "#,##0.00;[Red]-#,##0.00;0.00",
+    "percent_values_italic": true,
+    "negative_parentheses": false,
+    "zero_as_dash": false
+  },
+  "required_artifacts": [
+    "historical_model.xlsx",
+    "extracted_data.json",
+    "source_evidence.csv_or_xlsx",
+    "validation_report.json_or_xlsx",
+    "unmapped_lines.csv_or_xlsx",
+    "manual_review.csv_or_xlsx",
+    "restatement_comparison.csv_or_xlsx"
+  ]
+}
