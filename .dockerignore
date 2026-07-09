@@ -1,8 +1,0 @@
-.git
-.github
-reference_original
-__pycache__
-.pytest_cache
-.venv
-*.pyc
-*.zip
