@@ -4,11 +4,11 @@
 - [ ] GitHub repository URL is `https://github.com/SHIVA-IYER-SI/annual-report-three-statement-extractor` or the buttons were updated to the actual URL.
 - [ ] Render Blueprint created from `render.yaml`.
 - [ ] Render `/api/health` returns `status: ok`.
-- [ ] Render URL inserted into `docs/config.js`.
+- [ ] Render URL in `docs/config.js` matches the deployed backend.
 - [ ] GitHub Pages enabled from `main` and `/docs`.
 - [ ] **Wake the Numbers** wakes Render and opens the extractor.
 - [ ] **Contact / Suggestion** opens an email to `shivaiyer79@gmail.com`.
-- [ ] **Download your own** opens the GitHub repository.
+- [ ] **Get the Source Code** opens the GitHub repository.
 - [ ] One-company upload creates one workbook.
 - [ ] Mixed-company upload creates separate company workbooks.
 - [ ] Company detection confidence and source grouping appear in every artifact card.

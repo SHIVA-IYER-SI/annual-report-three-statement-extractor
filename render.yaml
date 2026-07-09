@@ -10,3 +10,6 @@ services:
         value: "60"
       - key: JOB_WORKERS
         value: "1"
+
+      - key: MALLOC_TRIM_THRESHOLD_
+        value: "131072"

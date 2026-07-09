@@ -1,6 +1,7 @@
 """Temporary job storage, mixed-company grouping and background execution."""
 from __future__ import annotations
 
+import gc
 import json
 import os
 import shutil
@@ -142,6 +143,11 @@ class JobManager:
 
             input_paths = [self._job_dir(job_id) / "inputs" / item["name"] for item in state["files"]]
             groups = group_documents(input_paths)
+            with self.lock:
+                state["progress"] = 55
+                state["message"] = f"Detected {len(groups)} company group(s); processing reports one at a time"
+                state["updated_at"] = utcnow().isoformat()
+                self._write_state(state)
             artifacts: list[dict[str, Any]] = []
             successful_paths: list[tuple[Path, str]] = []
             total_groups = max(1, len(groups))
@@ -155,16 +161,55 @@ class JobManager:
                 group_dir = self._job_dir(job_id) / "outputs" / group.artifact_id
                 group_dir.mkdir(parents=True, exist_ok=True)
                 try:
+                    group_file_count = max(1, len(group.documents))
+
+                    def progress_callback(stage: str, file_index: int, file_total: int, detail: str) -> None:
+                        stage_weights = {
+                            "EXTRACTING": 0.05,
+                            "PAGE": 0.30,
+                            "MAPPING": 0.72,
+                            "ASSEMBLING": 0.84,
+                            "VALIDATING": 0.91,
+                            "BUILDING_WORKBOOK": 0.96,
+                        }
+                        group_base = 55 + 40 * (index - 1) / total_groups
+                        group_span = 40 / total_groups
+                        file_fraction = max(0.0, min(1.0, (file_index - 1) / max(1, file_total)))
+                        stage_fraction = stage_weights.get(stage, 0.50)
+                        if stage in {"EXTRACTING", "PAGE", "MAPPING"}:
+                            fraction = file_fraction + stage_fraction / max(1, file_total)
+                        else:
+                            fraction = stage_fraction
+                        progress = min(94, int(group_base + group_span * fraction))
+                        labels = {
+                            "EXTRACTING": "Opening",
+                            "PAGE": "Reading statement pages",
+                            "MAPPING": "Normalizing",
+                            "ASSEMBLING": "Combining historical years",
+                            "VALIDATING": "Running validation checks",
+                            "BUILDING_WORKBOOK": "Building Excel workbook",
+                        }
+                        message = f"{labels.get(stage, 'Processing')} — {detail}"
+                        with self.lock:
+                            state["progress"] = max(int(state.get("progress") or 0), progress)
+                            state["message"] = message
+                            state["updated_at"] = utcnow().isoformat()
+                            self._write_state(state)
+
+                    inspection_hints = {str(document.path): document.extraction_hint() for document in group.documents}
                     result = extract_to_workbook(
                         input_paths=[document.path for document in group.documents],
                         output_dir=group_dir,
                         company_name=group.company_name,
                         scope=state["scope"],
                         fallback_unit=state["fallback_unit"],
+                        inspection_hints=inspection_hints,
+                        progress_callback=progress_callback,
                     )
                     summary = self._result_summary(result, group)
                     artifacts.append(summary)
                     successful_paths.append((result.workbook_path, result.workbook_filename))
+                    gc.collect()
                 except Exception as exc:
                     artifacts.append(
                         {
@@ -232,6 +277,9 @@ class JobManager:
                 "method": document.method,
                 "review_required": document.review_required,
                 "reason": document.reason,
+                "page_count": document.page_count,
+                "candidate_page_count": len(document.candidate_pages),
+                "document_year": document.document_year,
             }
             for document in group.documents
         ]

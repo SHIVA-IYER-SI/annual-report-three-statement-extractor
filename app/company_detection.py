@@ -1,19 +1,20 @@
-"""Best-effort company detection and safe grouping for mixed annual-report uploads.
+"""Low-memory company detection and statement-page inspection.
 
-The extractor never combines documents merely because detection failed. Confident
-company names are normalized and grouped; uncertain files receive their own group
-so two unrelated companies cannot be silently merged into one workbook.
+Each PDF is text-scanned once with pypdf. The resulting inspection is reused by
+financial-table extraction, avoiding a second full-document scan with
+pdfplumber. Uncertain company detections remain isolated so unrelated reports
+are never silently combined.
 """
 from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Iterable
 
-from .core.parsing import extract_years_from_text
+from .core.parsing import detect_currency, extract_years_from_text
 
 LEGAL_SUFFIX_RE = re.compile(
     r"\b(?:limited|ltd\.?|private\s+limited|pvt\.?\s+ltd\.?|corporation|corp\.?|incorporated|inc\.?|plc|llp|company|co\.?)\b",
@@ -31,6 +32,23 @@ FILE_NOISE_RE = re.compile(
     re.I,
 )
 
+STATEMENT_HEADING_PATTERNS = {
+    "INCOME_STATEMENT": (
+        r"statement\s+of\s+profit\s+and\s+loss",
+        r"profit\s+and\s+loss\s+account",
+        r"income\s+statement",
+        r"statement\s+of\s+income",
+    ),
+    "BALANCE_SHEET": (
+        r"balance\s+sheet",
+        r"statement\s+of\s+financial\s+position",
+    ),
+    "CASH_FLOW_STATEMENT": (
+        r"cash\s+flow\s+statement",
+        r"statement\s+of\s+cash\s+flows",
+    ),
+}
+
 
 @dataclass(frozen=True)
 class DetectedDocument:
@@ -41,6 +59,22 @@ class DetectedDocument:
     method: str
     review_required: bool
     reason: str | None = None
+    page_count: int = 0
+    candidate_pages: tuple[int, ...] = field(default_factory=tuple)
+    document_year: int | None = None
+    currency_detected: str | None = None
+    scanned_pages: int = 0
+
+    def extraction_hint(self) -> dict[str, object]:
+        return {
+            "page_count": self.page_count,
+            "candidate_pages": list(self.candidate_pages),
+            "document_year": self.document_year,
+            "currency_detected": self.currency_detected,
+            "company_detected": self.company_name,
+            "inspection_method": self.method,
+            "scanned_pages": self.scanned_pages,
+        }
 
 
 @dataclass
@@ -108,48 +142,99 @@ def _candidate_score(line: str, page_number: int, line_number: int, occurrences:
     return score
 
 
-def _pdf_candidates(path: Path, max_pages: int = 20) -> list[tuple[str, float, str]]:
+def _statement_types(text: str) -> set[str]:
+    lowered = text.casefold()
+    return {
+        statement
+        for statement, patterns in STATEMENT_HEADING_PATTERNS.items()
+        if any(re.search(pattern, lowered, re.I) for pattern in patterns)
+    }
+
+
+def _inspect_pdf(path: Path) -> tuple[list[tuple[str, float, str]], dict[str, object]]:
     try:
-        import pdfplumber
+        from pypdf import PdfReader
     except ImportError:
-        return []
-    raw: list[tuple[str, int, int]] = []
+        return [], {"page_count": 0, "candidate_pages": [], "scanned_pages": 0}
+
+    raw_candidates: list[tuple[str, int, int]] = []
+    candidate_pages: set[int] = set()
+    all_years: set[int] = set()
+    currency: str | None = None
+    page_count = 0
+    scanned_pages = 0
+
     try:
-        with pdfplumber.open(path) as pdf:
-            page_count = len(pdf.pages)
-            indices = set(range(min(max_pages, page_count)))
-            indices.update(range(max(0, page_count - 10), page_count))
-            indices.update(range(0, page_count, 25))
-            for page_index in sorted(indices):
-                page_number = page_index + 1
-                page = pdf.pages[page_index]
-                text = page.extract_text(x_tolerance=2, y_tolerance=3) or ""
+        reader = PdfReader(str(path), strict=False)
+        page_count = len(reader.pages)
+        for page_index, page in enumerate(reader.pages):
+            page_number = page_index + 1
+            try:
+                text = page.extract_text() or ""
+            except Exception:
+                text = ""
+            scanned_pages += 1
+
+            if page_number <= 30:
+                all_years.update(extract_years_from_text(text))
+                currency = currency or detect_currency(text)
+            if page_number <= 20 or page_number > max(20, page_count - 5):
                 for line_number, original in enumerate(text.splitlines()[:120], start=1):
                     line = _clean_line(original)
-                    if not 3 < len(line) < 180:
-                        continue
-                    if LEGAL_SUFFIX_RE.search(line):
-                        raw.append((line, page_number, line_number))
+                    if 3 < len(line) < 180 and LEGAL_SUFFIX_RE.search(line):
+                        raw_candidates.append((line, page_number, line_number))
+
+            statement_types = _statement_types(text)
+            if statement_types:
+                # Financial statements normally continue for a few pages after
+                # the heading. Reusing this list avoids full-document table scans.
+                for offset in range(0, 7):
+                    if page_number + offset <= page_count:
+                        candidate_pages.add(page_number + offset)
+
+            years_on_page = extract_years_from_text(text)
+            looks_tabular = bool(
+                years_on_page
+                and re.search(r"\bparticulars?\b", text, re.I)
+                and re.search(r"\b(?:assets?|liabilit|revenue|income|expenses?|cash\s+flow|profit|loss)\b", text, re.I)
+            )
+            if looks_tabular:
+                candidate_pages.add(page_number)
+
+            # Release page content before the next iteration.
+            del text
     except Exception:
-        return []
+        return [], {"page_count": page_count, "candidate_pages": [], "scanned_pages": scanned_pages}
+
     counts: dict[str, int] = {}
-    for line, _, _ in raw:
-        counts[normalize_company_key(line)] = counts.get(normalize_company_key(line), 0) + 1
-    candidates = []
-    for line, page_number, line_number in raw:
+    for line, _, _ in raw_candidates:
+        key = normalize_company_key(line)
+        counts[key] = counts.get(key, 0) + 1
+    candidates: list[tuple[str, float, str]] = []
+    for line, page_number, line_number in raw_candidates:
         key = normalize_company_key(line)
         if len(key) < 3:
             continue
         candidates.append((line, _candidate_score(line, page_number, line_number, counts.get(key, 1)), f"PDF page {page_number}"))
     candidates.sort(key=lambda item: (-item[1], len(item[0]), item[0].casefold()))
-    return candidates
+
+    selected_pages = sorted(candidate_pages)
+    if len(selected_pages) > 60:
+        selected_pages = selected_pages[:60]
+    return candidates, {
+        "page_count": page_count,
+        "candidate_pages": selected_pages,
+        "document_year": max(all_years) if all_years else None,
+        "currency_detected": currency,
+        "scanned_pages": scanned_pages,
+    }
 
 
-def _xbrl_candidates(path: Path) -> list[tuple[str, float, str]]:
+def _inspect_xbrl(path: Path) -> tuple[list[tuple[str, float, str]], dict[str, object]]:
     try:
         text = path.read_text(encoding="utf-8", errors="ignore")[:5_000_000]
     except Exception:
-        return []
+        return [], {"page_count": 0, "candidate_pages": [], "scanned_pages": 1}
     candidates: list[tuple[str, float, str]] = []
     patterns = [
         r"<(?:[^>]*:)?(?:NameOfReportingEntityOrOtherMeansOfIdentification|EntityLegalName|NameOfCompany)[^>]*>(.*?)</",
@@ -161,22 +246,48 @@ def _xbrl_candidates(path: Path) -> list[tuple[str, float, str]]:
             value = _clean_line(value)
             if len(normalize_company_key(value)) >= 3:
                 candidates.append((value, 10.0, "XBRL entity fact"))
-    return candidates
+    years = extract_years_from_text(text)
+    return candidates, {
+        "page_count": 0,
+        "candidate_pages": [],
+        "document_year": max(years) if years else None,
+        "currency_detected": detect_currency(text),
+        "scanned_pages": 1,
+    }
 
 
 def detect_document_company(path: Path) -> DetectedDocument:
     suffix = path.suffix.casefold()
-    candidates = _xbrl_candidates(path) if suffix in {".xml", ".xhtml", ".html", ".htm"} else _pdf_candidates(path)
+    if suffix in {".xml", ".xhtml", ".html", ".htm"}:
+        candidates, inspection = _inspect_xbrl(path)
+    else:
+        candidates, inspection = _inspect_pdf(path)
+
+    common = {
+        "page_count": int(inspection.get("page_count") or 0),
+        "candidate_pages": tuple(int(item) for item in inspection.get("candidate_pages") or []),
+        "document_year": inspection.get("document_year"),
+        "currency_detected": inspection.get("currency_detected"),
+        "scanned_pages": int(inspection.get("scanned_pages") or 0),
+    }
     if candidates:
         display, score, method = candidates[0]
         key = normalize_company_key(display)
         confidence = max(0.0, min(0.99, score / 10.0))
         if score >= 5.5 and key:
-            return DetectedDocument(path, display, key, confidence, method, score < 7.0, None if score >= 7.0 else "LOW_COMPANY_DETECTION_CONFIDENCE")
+            return DetectedDocument(
+                path=path,
+                company_name=display,
+                company_key=key,
+                confidence=confidence,
+                method=method,
+                review_required=score < 7.0,
+                reason=None if score >= 7.0 else "LOW_COMPANY_DETECTION_CONFIDENCE",
+                **common,
+            )
+
     fallback = _filename_fallback(path)
     key = normalize_company_key(fallback)
-    # A fallback is deliberately unique later, so unrelated unknown files are
-    # never merged merely because both were called "annual_report.pdf".
     return DetectedDocument(
         path=path,
         company_name=fallback,
@@ -185,6 +296,7 @@ def detect_document_company(path: Path) -> DetectedDocument:
         method="filename fallback",
         review_required=True,
         reason="COMPANY_NAME_NOT_CONFIDENTLY_DETECTED",
+        **common,
     )
 
 
@@ -206,8 +318,6 @@ def group_documents(paths: Iterable[Path]) -> list[CompanyGroup]:
     groups: list[CompanyGroup] = []
     for document in detected:
         target: CompanyGroup | None = None
-        # Uncertain files are isolated unless the detected key is meaningful and
-        # another confident group already matches it.
         if document.confidence >= 0.55:
             target = next((group for group in groups if _keys_match(document.company_key, group.company_key)), None)
         if target is None:
@@ -223,7 +333,6 @@ def group_documents(paths: Iterable[Path]) -> list[CompanyGroup]:
         else:
             target.documents.append(document)
             target.review_required = target.review_required or document.review_required
-            # Prefer the longest legal display name among matching files.
             if len(document.company_name) > len(target.company_name):
                 target.company_name = document.company_name
     groups.sort(key=lambda group: (group.company_name.casefold(), group.documents[0].path.name.casefold()))

@@ -6,6 +6,7 @@ single-purpose workflow: upload -> extract -> validate -> preview -> download.
 """
 from __future__ import annotations
 
+import gc
 import json
 import re
 import shutil
@@ -14,7 +15,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from .core.assembly import DynamicStatementAssembler, SelectedValue, workbook_payload
 from .core.detection import STATEMENT_PATTERNS, detect_scope
@@ -218,40 +219,58 @@ def _table_rows(
     return rows
 
 
-def extract_pdf_rows(path: Path, selected_scope: str, fallback_unit: str) -> tuple[list[RawRow], dict[str, Any], list[str]]:
+def extract_pdf_rows(
+    path: Path,
+    selected_scope: str,
+    fallback_unit: str,
+    inspection_hint: dict[str, Any] | None = None,
+    progress_callback: Callable[[str], None] | None = None,
+) -> tuple[list[RawRow], dict[str, Any], list[str]]:
+    """Extract tables only from likely statement pages.
+
+    The lightweight pypdf inspection performed during company grouping supplies
+    candidate pages. This keeps pdfplumber away from hundreds of narrative pages
+    and releases every processed page before moving to the next one.
+    """
     try:
         import pdfplumber
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("pdfplumber is required") from exc
 
+    hint = inspection_hint or {}
     checksum = sha256_file(path)
     warnings: list[str] = []
     rows: list[RawRow] = []
-    page_texts: list[str] = []
     page_meta: list[dict[str, Any]] = []
-    document_years: list[int] = []
-    detected_currency: str | None = None
-    detected_company: str | None = None
-    active_statement: str | None = None
-    active_until = 0
+    document_year = hint.get("document_year")
+    detected_currency = hint.get("currency_detected")
+    detected_company = hint.get("company_detected")
+    hinted_pages = sorted({int(item) for item in hint.get("candidate_pages", []) if int(item) > 0})
 
     with pdfplumber.open(path) as pdf:
-        for page_number, page in enumerate(pdf.pages, start=1):
-            text = page.extract_text(x_tolerance=2, y_tolerance=3) or ""
-            page_texts.append(text)
-            if page_number <= 20:
-                document_years.extend(extract_years_from_text(text))
-                detected_currency = detected_currency or detect_currency(text)
-                if not detected_company:
-                    for line in text.splitlines()[:80]:
-                        if re.search(r"\b(limited|ltd\.?|corporation|company)\b", line, re.I) and 3 < len(line.strip()) < 180:
-                            detected_company = line.strip()
-                            break
+        page_count = len(pdf.pages)
+        if hinted_pages:
+            selected_pages = [number for number in hinted_pages if number <= page_count]
+        else:
+            # Defensive fallback for direct library callers. It is intentionally
+            # capped; normal web jobs always arrive with a one-pass inspection.
+            selected_pages = list(range(1, min(page_count, 40) + 1))
+            warnings.append(f"{path.name}: no page inspection hint was available; only the first {len(selected_pages)} pages were checked.")
 
+        if not selected_pages:
+            warnings.append(f"No likely financial-statement pages were identified in {path.name}.")
+
+        active_statement: str | None = None
+        active_until = 0
+        for position, page_number in enumerate(selected_pages, start=1):
+            if progress_callback and (position == 1 or position % 2 == 0 or position == len(selected_pages)):
+                progress_callback(f"Reading likely statement page {position} of {len(selected_pages)} in {path.name}")
+            page = pdf.pages[page_number - 1]
+            text = page.extract_text(x_tolerance=2, y_tolerance=3) or ""
             heading = _statement_heading(text)
             if heading:
                 active_statement = heading
-                active_until = page_number + 5
+                active_until = page_number + 6
             elif page_number > active_until:
                 active_statement = None
 
@@ -262,24 +281,27 @@ def extract_pdf_rows(path: Path, selected_scope: str, fallback_unit: str) -> tup
                 and selected_scope not in available_scopes
             )
             page_unit = detect_unit(text) or fallback_unit
-            tables = page.extract_tables(
-                {
-                    "vertical_strategy": "lines",
-                    "horizontal_strategy": "lines",
-                    "snap_tolerance": 4,
-                    "join_tolerance": 4,
-                    "intersection_tolerance": 6,
-                }
-            ) or []
-            if not tables:
+            tables: list[list[list[Any]]] = []
+            if not explicit_opposite:
                 tables = page.extract_tables(
                     {
-                        "vertical_strategy": "text",
-                        "horizontal_strategy": "text",
-                        "text_tolerance": 3,
-                        "intersection_tolerance": 8,
+                        "vertical_strategy": "lines",
+                        "horizontal_strategy": "lines",
+                        "snap_tolerance": 4,
+                        "join_tolerance": 4,
+                        "intersection_tolerance": 6,
                     }
                 ) or []
+                if not tables:
+                    tables = page.extract_tables(
+                        {
+                            "vertical_strategy": "text",
+                            "horizontal_strategy": "text",
+                            "text_tolerance": 3,
+                            "intersection_tolerance": 8,
+                        }
+                    ) or []
+
             page_meta.append(
                 {
                     "page": page_number,
@@ -290,8 +312,6 @@ def extract_pdf_rows(path: Path, selected_scope: str, fallback_unit: str) -> tup
                     "unit": page_unit,
                 }
             )
-            if explicit_opposite:
-                continue
             for table_index, table in enumerate(tables):
                 rows.extend(
                     _table_rows(
@@ -302,26 +322,37 @@ def extract_pdf_rows(path: Path, selected_scope: str, fallback_unit: str) -> tup
                         statement_hint=active_statement,
                         scope_hint=scope_hint,
                         unit=page_unit,
-                        source_document_year=max(document_years) if document_years else None,
+                        source_document_year=int(document_year) if document_year else None,
                         table_title=f"Page {page_number} table {table_index + 1}",
                     )
                 )
 
+            # pdfplumber caches layout objects. Clear them before advancing so
+            # multi-report jobs stay below small-host memory limits.
+            try:
+                page.flush_cache()
+            except Exception:
+                pass
+            del tables, text, page
+            if position % 3 == 0 or position == len(selected_pages):
+                gc.collect()
+
     if not rows:
         warnings.append(f"No native financial-table rows were detected in {path.name}. The PDF may be scanned or unusually structured.")
     if any(meta["text_characters"] < 80 and meta["tables"] == 0 for meta in page_meta):
-        warnings.append(f"{path.name} contains image-dominant pages. OCR is not bundled in this lightweight deployment.")
+        warnings.append(f"{path.name} contains image-dominant statement pages. OCR is not bundled in this lightweight deployment.")
     metadata = {
         "filename": path.name,
         "checksum": checksum,
-        "page_count": len(page_texts),
-        "document_year": max(document_years) if document_years else None,
+        "page_count": int(hint.get("page_count") or 0),
+        "pages_inspected_for_tables": len(page_meta),
+        "candidate_pages": selected_pages,
+        "document_year": document_year,
         "company_detected": detected_company,
         "currency_detected": detected_currency,
         "page_metadata": page_meta,
     }
     return rows, metadata, warnings
-
 
 def _concept_label(concept: str) -> str:
     local = concept.rsplit("}", 1)[-1].split(":")[-1]
@@ -484,6 +515,8 @@ def extract_to_workbook(
     scope: str = "CONSOLIDATED",
     fallback_unit: str = "crore",
     max_years: int = 10,
+    inspection_hints: dict[str, dict[str, Any]] | None = None,
+    progress_callback: Callable[[str, int, int, str], None] | None = None,
 ) -> ExtractionResult:
     resource_errors = verify_runtime_resources()
     if resource_errors:
@@ -496,132 +529,158 @@ def extract_to_workbook(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     mapper = CanonicalMapper()
-    raw_rows: list[RawRow] = []
     document_metadata: list[dict[str, Any]] = []
     warnings: list[str] = []
+    chosen: dict[tuple[str, str, int], CandidateRecord] = {}
+    restatements: list[dict[str, Any]] = []
+    unmapped: list[dict[str, Any]] = []
+    detected_years: set[int] = set()
+    evidence_counter = 0
+    mapped_row_count = 0
+    mapping_review_count = 0
+    raw_row_count = 0
 
     paths = [Path(path) for path in input_paths]
     if not paths:
         raise ValueError("At least one annual report or XBRL file is required")
-    for path in paths:
+    hints = inspection_hints or {}
+    total_files = len(paths)
+
+    for file_index, path in enumerate(paths, start=1):
+        if progress_callback:
+            progress_callback("EXTRACTING", file_index, total_files, path.name)
         issues = validate_input_file(path)
         if issues:
             raise ValueError(f"{path.name}: {', '.join(issues)}")
+        hint = hints.get(str(path)) or hints.get(path.name) or {}
         if path.suffix.lower() == ".pdf":
-            rows, metadata, file_warnings = extract_pdf_rows(path, scope, fallback_unit)
+            rows, metadata, file_warnings = extract_pdf_rows(
+                path,
+                scope,
+                fallback_unit,
+                inspection_hint=hint,
+                progress_callback=(
+                    (lambda message, fi=file_index, tf=total_files, name=path.name: progress_callback("PAGE", fi, tf, message))
+                    if progress_callback
+                    else None
+                ),
+            )
         else:
             rows, metadata, file_warnings = extract_xbrl_rows(path, scope)
-        raw_rows.extend(rows)
         document_metadata.append(metadata)
         warnings.extend(file_warnings)
+        raw_row_count += len(rows)
 
-    chosen: dict[tuple[str, str, int], CandidateRecord] = {}
-    restatements: list[dict[str, Any]] = []
-    unmapped: list[dict[str, Any]] = []
-    evidence_counter = 0
-    mapped_row_count = 0
-    mapping_review_count = 0
-
-    for row in raw_rows:
-        statement, candidate, alternatives = _best_mapping(mapper, row)
-        if not statement or not candidate:
-            unmapped.append(
-                {
-                    "source_file": row.source_file,
-                    "page": row.page,
-                    "statement_hint": row.statement_hint,
-                    "original_label": row.label,
-                    "years": sorted(row.values),
-                    "top_candidate": getattr(candidate, "canonical_key", None),
-                    "top_score": round(float(getattr(candidate, "score", 0)), 4) if candidate else None,
-                }
-            )
-            continue
-
-        mapped_row_count += 1
-        context = " ".join(filter(None, [row.table_title, row.context, row.scope_hint]))
-        same_candidates = [item[1] for item in alternatives if item[0] == statement]
-        mandatory_review = mapper.needs_mandatory_review(row.label, same_candidates, context)
-        if mandatory_review:
-            mapping_review_count += 1
-        unit = row.unit or fallback_unit
-        for year, raw_value in row.values.items():
-            parsed = parse_number(
-                raw_value,
-                dash_means_zero=False,
-                expense_as_positive=(statement == "INCOME_STATEMENT" and any(token in normalize_label(row.label) for token in ("expense", "cost", "tax"))),
-            )
-            normalized = normalize_to_crore(parsed.value, unit)
-            if parsed.value is not None and normalized is None:
-                warnings.append(f"Unit could not be normalized for {row.label} in {row.source_file}; fallback {fallback_unit} was used.")
-                normalized = normalize_to_crore(parsed.value, fallback_unit)
-            if normalized is None and parsed.status != "DISCLOSED_ZERO":
+        if progress_callback:
+            progress_callback("MAPPING", file_index, total_files, path.name)
+        for row in rows:
+            detected_years.update(row.values)
+            statement, candidate, alternatives = _best_mapping(mapper, row)
+            if not statement or not candidate:
+                unmapped.append(
+                    {
+                        "source_file": row.source_file,
+                        "page": row.page,
+                        "statement_hint": row.statement_hint,
+                        "original_label": row.label,
+                        "years": sorted(row.values),
+                        "top_candidate": getattr(candidate, "canonical_key", None),
+                        "top_score": round(float(getattr(candidate, "score", 0)), 4) if candidate else None,
+                    }
+                )
                 continue
-            evidence_counter += 1
-            source = {
-                "source_file": row.source_file,
-                "source_checksum": row.source_checksum,
-                "page": row.page,
-                "original_label": row.label,
-                "status": parsed.status,
-                "unit_detected": unit,
-                "scope": scope,
-                "source_type": row.source_type,
-                "mapping_confidence": round(float(candidate.confidence), 4),
-                "extraction_confidence": round(float(row.extraction_confidence), 4),
-                "mandatory_review": mandatory_review,
-            }
-            selected = SelectedValue(
-                evidence_id=evidence_counter,
-                statement_type=statement,
-                canonical_key=candidate.canonical_key,
-                financial_year=year,
-                value=normalized,
-                status="AMBIGUOUS_REVIEW_REQUIRED" if mandatory_review else parsed.status,
-                source=source,
-            )
-            record = CandidateRecord(
-                selected=selected,
-                mapping_confidence=float(candidate.confidence),
-                extraction_confidence=float(row.extraction_confidence),
-                source_document_year=int(row.source_document_year or year),
-                original_label=row.label,
-                source_file=row.source_file,
-                page=row.page,
-            )
-            key = (statement, candidate.canonical_key, year)
-            existing = chosen.get(key)
-            if existing is None:
-                chosen[key] = record
-            elif record.preference > existing.preference:
-                if existing.selected.value != record.selected.value:
+
+            mapped_row_count += 1
+            context = " ".join(filter(None, [row.table_title, row.context, row.scope_hint]))
+            same_candidates = [item[1] for item in alternatives if item[0] == statement]
+            mandatory_review = mapper.needs_mandatory_review(row.label, same_candidates, context)
+            if mandatory_review:
+                mapping_review_count += 1
+            unit = row.unit or fallback_unit
+            for year, raw_value in row.values.items():
+                parsed = parse_number(
+                    raw_value,
+                    dash_means_zero=False,
+                    expense_as_positive=(statement == "INCOME_STATEMENT" and any(token in normalize_label(row.label) for token in ("expense", "cost", "tax"))),
+                )
+                normalized = normalize_to_crore(parsed.value, unit)
+                if parsed.value is not None and normalized is None:
+                    warnings.append(f"Unit could not be normalized for {row.label} in {row.source_file}; fallback {fallback_unit} was used.")
+                    normalized = normalize_to_crore(parsed.value, fallback_unit)
+                if normalized is None and parsed.status != "DISCLOSED_ZERO":
+                    continue
+                evidence_counter += 1
+                source = {
+                    "source_file": row.source_file,
+                    "source_checksum": row.source_checksum,
+                    "page": row.page,
+                    "original_label": row.label,
+                    "status": parsed.status,
+                    "unit_detected": unit,
+                    "scope": scope,
+                    "source_type": row.source_type,
+                    "mapping_confidence": round(float(candidate.confidence), 4),
+                    "extraction_confidence": round(float(row.extraction_confidence), 4),
+                    "mandatory_review": mandatory_review,
+                }
+                selected = SelectedValue(
+                    evidence_id=evidence_counter,
+                    statement_type=statement,
+                    canonical_key=candidate.canonical_key,
+                    financial_year=year,
+                    value=normalized,
+                    status="AMBIGUOUS_REVIEW_REQUIRED" if mandatory_review else parsed.status,
+                    source=source,
+                )
+                record = CandidateRecord(
+                    selected=selected,
+                    mapping_confidence=float(candidate.confidence),
+                    extraction_confidence=float(row.extraction_confidence),
+                    source_document_year=int(row.source_document_year or year),
+                    original_label=row.label,
+                    source_file=row.source_file,
+                    page=row.page,
+                )
+                key = (statement, candidate.canonical_key, year)
+                existing = chosen.get(key)
+                if existing is None:
+                    chosen[key] = record
+                elif record.preference > existing.preference:
+                    if existing.selected.value != record.selected.value:
+                        restatements.append(
+                            {
+                                "statement": statement,
+                                "canonical_key": candidate.canonical_key,
+                                "year": year,
+                                "previous_value": str(existing.selected.value),
+                                "selected_value": str(record.selected.value),
+                                "previous_source": existing.source_file,
+                                "selected_source": record.source_file,
+                                "resolution": "LATEST_SOURCE_DOCUMENT_AND_CONFIDENCE",
+                            }
+                        )
+                    chosen[key] = record
+                elif existing.selected.value != record.selected.value:
                     restatements.append(
                         {
                             "statement": statement,
                             "canonical_key": candidate.canonical_key,
                             "year": year,
-                            "previous_value": str(existing.selected.value),
-                            "selected_value": str(record.selected.value),
-                            "previous_source": existing.source_file,
-                            "selected_source": record.source_file,
-                            "resolution": "LATEST_SOURCE_DOCUMENT_AND_CONFIDENCE",
+                            "previous_value": str(record.selected.value),
+                            "selected_value": str(existing.selected.value),
+                            "previous_source": record.source_file,
+                            "selected_source": existing.source_file,
+                            "resolution": "KEPT_HIGHER_PRIORITY_SOURCE",
                         }
                     )
-                chosen[key] = record
-            elif existing.selected.value != record.selected.value:
-                restatements.append(
-                    {
-                        "statement": statement,
-                        "canonical_key": candidate.canonical_key,
-                        "year": year,
-                        "previous_value": str(record.selected.value),
-                        "selected_value": str(existing.selected.value),
-                        "previous_source": record.source_file,
-                        "selected_source": existing.source_file,
-                        "resolution": "KEPT_HIGHER_PRIORITY_SOURCE",
-                    }
-                )
 
+        # Only compact selected candidates survive to the next source file.
+        rows.clear()
+        del rows
+        gc.collect()
+
+    if progress_callback:
+        progress_callback("ASSEMBLING", total_files, total_files, company_name)
     selected_values = [record.selected for record in chosen.values()]
     years = sorted({value.financial_year for value in selected_values})
     if len(years) > max_years:
@@ -629,14 +688,13 @@ def extract_to_workbook(
         selected_values = [value for value in selected_values if value.financial_year in years]
         warnings.append(f"Only the latest {max_years} historical years were retained.")
     if not years:
-        # Still produce the required three-sheet structure using the best year
-        # detectable from the source, so the UI can explain why review is needed.
-        detected_years = sorted({year for row in raw_rows for year in row.values})
-        years = detected_years[-2:] if detected_years else [datetime.now(timezone.utc).year]
+        years = sorted(detected_years)[-2:] if detected_years else [datetime.now(timezone.utc).year]
 
     assembled = DynamicStatementAssembler().assemble(selected_values, years)
     payload = workbook_payload(company_name, scope, years, assembled)
 
+    if progress_callback:
+        progress_callback("VALIDATING", total_files, total_files, company_name)
     validation_summary = StatementValidator().validate(
         scope_values={scope},
         units={"INR_CRORE"},
@@ -669,38 +727,18 @@ def extract_to_workbook(
             "id": "FILES",
             "label": "Annual-report/XBRL files accepted",
             "status": "PASS" if document_metadata else "FAIL",
-            "detail": f"{len(document_metadata)} file(s) processed",
+            "detail": f"{len(document_metadata)} file(s) processed sequentially",
         },
-        {
-            "id": "SCOPE",
-            "label": "Single accounting scope",
-            "status": "PASS",
-            "detail": scope.title(),
-        },
-        {
-            "id": "UNIT",
-            "label": "Values normalized to INR crore",
-            "status": "PASS",
-            "detail": f"Fallback input unit: {fallback_unit}",
-        },
+        {"id": "SCOPE", "label": "Single accounting scope", "status": "PASS", "detail": scope.title()},
+        {"id": "UNIT", "label": "Values normalized to INR crore", "status": "PASS", "detail": f"Fallback input unit: {fallback_unit}"},
         {
             "id": "THREE_STATEMENTS",
             "label": "Income Statement, Balance Sheet and Cash Flow Statement detected",
             "status": "FAIL" if missing_statements else "PASS",
             "detail": "Missing: " + ", ".join(STATEMENT_TO_SHEET[item] for item in missing_statements) if missing_statements else "All three statements contain mapped rows",
         },
-        {
-            "id": "HISTORICAL_ONLY",
-            "label": "Historical actual years only",
-            "status": "PASS",
-            "detail": ", ".join(f"FY{str(year)[-2:]}" for year in years),
-        },
-        {
-            "id": "DYNAMIC_ROWS",
-            "label": "Only disclosed or supported rows included",
-            "status": "PASS",
-            "detail": f"{sum(statement_counts.values())} workbook rows",
-        },
+        {"id": "HISTORICAL_ONLY", "label": "Historical actual years only", "status": "PASS", "detail": ", ".join(f"FY{str(year)[-2:]}" for year in years)},
+        {"id": "DYNAMIC_ROWS", "label": "Only disclosed or supported rows included", "status": "PASS", "detail": f"{sum(statement_counts.values())} workbook rows"},
         {
             "id": "MAPPING",
             "label": "Canonical mapping review",
@@ -719,20 +757,20 @@ def extract_to_workbook(
             "status": "FAIL" if cash_failed else ("PASS" if any(item["outcome"] == "PASS" for item in cash_findings) else "NOT_RUN"),
             "detail": "Opening cash + movement = closing cash where inputs are available",
         },
-        {
-            "id": "WORKBOOK",
-            "label": "Exact three-sheet workbook contract",
-            "status": "PENDING",
-            "detail": "Validated after workbook generation",
-        },
+        {"id": "WORKBOOK", "label": "Exact three-sheet workbook contract", "status": "PENDING", "detail": "Validated after workbook generation"},
     ]
 
+    if progress_callback:
+        progress_callback("BUILDING_WORKBOOK", total_files, total_files, company_name)
     suffix = "_REVIEW_REQUIRED" if review_required else ""
     safe_company = safe_filename(company_name).replace(" ", "_") or "Company"
     workbook_filename = f"{safe_company}_Historical_3_Statement_{scope.title()}_FY{years[0]}_FY{years[-1]}{suffix}.xlsx"
     workbook_path = output_dir / workbook_filename
     workbook = build_workbook(payload, review_required=review_required)
     workbook.save(workbook_path)
+    workbook.close()
+    del workbook
+    gc.collect()
     workbook_errors = assert_workbook_contract(workbook_path)
     checklist[-1]["status"] = "FAIL" if workbook_errors else "PASS"
     checklist[-1]["detail"] = "; ".join(workbook_errors) if workbook_errors else "3 exact sheets, no forecasts, freeze panes C3, gridlines off"
@@ -742,12 +780,13 @@ def extract_to_workbook(
     preview = _preview_from_payload(payload, review_required)
     statistics = {
         "files": len(document_metadata),
-        "raw_rows_detected": len(raw_rows),
+        "raw_rows_detected": raw_row_count,
         "mapped_source_rows": mapped_row_count,
         "selected_values": len(selected_values),
         "unmapped_rows": len(unmapped),
         "mapping_reviews": mapping_review_count,
         "restatement_comparisons": len(restatements),
+        "processing_mode": "SEQUENTIAL_LOW_MEMORY",
         "statement_rows": {STATEMENT_TO_SHEET[key]: value for key, value in statement_counts.items()},
         "blueprint_line_items": {STATEMENT_TO_SHEET[key]: len(rows) for key, rows in line_item_universes().items()},
         "blueprint_validation_checks": {STATEMENT_TO_SHEET[key]: len(rows) for key, rows in validation_universes().items()},
@@ -757,24 +796,14 @@ def extract_to_workbook(
     extracted_json_path = output_dir / "extracted_data.json"
     extracted_json_path.write_text(
         json.dumps(
-            {
-                "payload": payload,
-                "preview": preview,
-                "statistics": statistics,
-                "unmapped": unmapped,
-                "restatements": restatements,
-                "warnings": warnings,
-            },
+            {"payload": payload, "preview": preview, "statistics": statistics, "unmapped": unmapped, "restatements": restatements, "warnings": warnings},
             indent=2,
             default=_json_default,
         ),
         encoding="utf-8",
     )
     validation_json_path = output_dir / "validation_report.json"
-    validation_json_path.write_text(
-        json.dumps({"checklist": checklist, "validation": validation}, indent=2, default=_json_default),
-        encoding="utf-8",
-    )
+    validation_json_path.write_text(json.dumps({"checklist": checklist, "validation": validation}, indent=2, default=_json_default), encoding="utf-8")
     audit_json_path = output_dir / "audit_summary.json"
     audit_json_path.write_text(
         json.dumps(
@@ -784,11 +813,7 @@ def extract_to_workbook(
                 "scope": scope,
                 "years": years,
                 "review_required": review_required,
-                "workbook": {
-                    "filename": workbook_filename,
-                    "sha256": sha256_file(workbook_path),
-                    "bytes": workbook_path.stat().st_size,
-                },
+                "workbook": {"filename": workbook_filename, "sha256": sha256_file(workbook_path), "bytes": workbook_path.stat().st_size},
                 "input_files": document_metadata,
                 "statistics": statistics,
             },

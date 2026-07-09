@@ -4,22 +4,63 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Upload annual reports from one or multiple companies and generate separate source-backed historical three-statement Excel workbooks." />
-  <title>Annual Report Three-Statement Extractor</title>
+  <meta name="theme-color" content="#14233b" />
+  <title>Wake the Numbers · Annual Report Extractor</title>
   <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
-  <main class="page shell">
-    <header class="pageHeader">
-      <div>
-        <span class="eyebrow">The numbers are awake</span>
-        <h1>Historical three-statement extraction</h1>
-        <p>Upload 1–10 annual reports or XBRL files. The tool detects the companies, groups matching reports, and creates a separate normalized Excel workbook for each company.</p>
+  <section id="splashScreen" class="splashScreen" aria-labelledby="splashTitle">
+    <div class="splashNoise" aria-hidden="true"></div>
+    <div class="splashContent">
+      <span class="splashKicker">A three-statement extraction machine with mild trust issues</span>
+      <h1 id="splashTitle">Annual reports entered the chat.</h1>
+      <p>Let’s turn hundreds of pages of corporate storytelling into clean historical financial statements.</p>
+      <button id="wakeButton" class="wakeButton" type="button">
+        <span class="wakeIcon" aria-hidden="true">↯</span>
+        <span id="wakeButtonText">Wake the Numbers</span>
+      </button>
+      <div class="wakeMessageWrap" aria-live="polite">
+        <span id="wakeMessage">Python is probably napping. One click fixes that.</span>
+        <div class="wakeTrack"><div id="wakeBar" class="wakeBar"></div></div>
       </div>
-      <div class="headerTools">
-        <div class="privacyPill">Temporary processing · auto-delete</div>
-        <a class="button secondary" href="mailto:shivaiyer79@gmail.com?subject=Annual%20Report%20Extractor%20-%20Issue%20or%20Suggestion">Contact / Suggestion</a>
-        <a class="button secondary" href="https://github.com/SHIVA-IYER-SI/annual-report-three-statement-extractor" target="_blank" rel="noopener noreferrer">Download your own</a>
+      <div class="splashNotes" aria-label="Tool limits">
+        <span><strong>1–10</strong> reports</span>
+        <span><strong>250 MB</strong> each</span>
+        <span><strong>3</strong> statement sheets</span>
+        <span><strong>0</strong> permanent uploads</span>
       </div>
+    </div>
+    <div class="splashIllustration" aria-hidden="true">
+      <div class="paper paperA"><b>AR 2021</b><i></i><i></i><i></i><small>247 pages of optimism</small></div>
+      <div class="paper paperB"><b>AR 2025</b><i></i><i></i><i></i><small>Footnotes included</small></div>
+      <div class="numberMachine">
+        <span class="machineDot"></span>
+        <strong>NORMALIZER</strong>
+        <div>Income Statement</div>
+        <div>Balance Sheet</div>
+        <div>Cash Flow</div>
+      </div>
+      <div class="excelMini"><b>XLSX</b><span>Historical Financials</span></div>
+      <div class="stickyNote">EBITDA ≠ cash flow</div>
+    </div>
+  </section>
+
+  <main id="appShell" class="page shell appShell hidden">
+    <nav class="appNav" aria-label="Application navigation">
+      <a class="appBrand" href="/">
+        <span class="brandMark">Σ</span>
+        <span><strong>Wake the Numbers</strong><small>Annual-report extractor</small></span>
+      </a>
+      <div class="navActions">
+        <span class="privacyPill">Temporary processing · auto-delete</span>
+        <a class="button secondary" href="https://github.com/SHIVA-IYER-SI/annual-report-three-statement-extractor" target="_blank" rel="noopener noreferrer">Get the Source Code</a>
+      </div>
+    </nav>
+
+    <header class="pageHeader fullHero">
+      <span class="eyebrow">Clean historical actuals, not invented numbers</span>
+      <h1>Turn annual reports into clean historical financial statements.</h1>
+      <p>Upload 1–10 PDF or XBRL files. Reports are detected, separated company-wise, processed one at a time to conserve memory, and converted into a separate reviewable Excel workbook for each company.</p>
     </header>
 
     <section class="summaryStrip" aria-label="Blueprint summary">
@@ -52,14 +93,14 @@
           <label class="fullWidth">
             Annual reports / XBRL files
             <input id="files" name="files" type="file" accept=".pdf,.xml,.xhtml,.html,.htm" multiple required />
-            <small>Select 1–10 files. They may belong to one company or multiple companies. Each file may be up to 250 MB.</small>
+            <small>Select 1–10 files. They may belong to one company or several companies. Each file may be up to 250 MB.</small>
           </label>
         </div>
         <div id="fileList" class="fileList" aria-live="polite"></div>
-        <p class="helper">Company names are detected from each report. Matching reports are combined; different companies receive separate workbooks. Low-confidence detections are isolated rather than silently mixed.</p>
+        <p class="helper">Matching reports are combined by company. Different companies receive separate workbooks. Low-confidence detections are isolated instead of silently mixed.</p>
         <div class="formActions">
-          <button id="submitButton" class="button primary" type="submit">Analyze annual reports</button>
-          <span class="supportText">1–10 files · PDF, XML, XHTML · 250 MB maximum per file</span>
+          <button id="submitButton" class="button primary" type="submit">Prepare Historical Financials</button>
+          <span class="supportText">The button locks during upload, extraction, validation and workbook creation.</span>
         </div>
       </form>
     </section>
@@ -67,11 +108,14 @@
     <section id="statusSection" class="card statusCard hidden" aria-live="polite">
       <div class="runHeader">
         <div>
-          <span class="eyebrow">Current extraction</span>
+          <span class="eyebrow">Current job</span>
           <h2 id="statusTitle">Preparing files</h2>
           <p id="statusMessage">Waiting to begin.</p>
         </div>
         <span id="statusBadge" class="statusBadge notReady">Not ready</span>
+      </div>
+      <div class="stageRow" aria-label="Processing stages">
+        <span>Upload</span><span>Detect</span><span>Extract</span><span>Validate</span><span>Excel</span>
       </div>
       <div class="progressTrack" aria-hidden="true"><div id="progressBar" class="progressBar"></div></div>
       <div class="progressMeta"><span id="progressText">0%</span><span id="expiryText"></span></div>
@@ -106,34 +150,30 @@
       </div>
     </section>
 
-    <footer class="appFooter">
-      <span>Found an issue or have a suggestion?</span>
-      <a href="mailto:shivaiyer79@gmail.com?subject=Annual%20Report%20Extractor%20-%20Issue%20or%20Suggestion">Contact Shiva</a>
-      <span>·</span>
-      <a href="https://github.com/SHIVA-IYER-SI/annual-report-three-statement-extractor" target="_blank" rel="noopener noreferrer">Download your own</a>
-    </footer>
+    <section class="contactCard">
+      <div>
+        <span class="eyebrow">Something looks wrong—or you have a better idea?</span>
+        <h2>Report an issue or suggest an improvement.</h2>
+        <p>Include the file type, what happened, and a screenshot where possible. Do not email confidential annual reports.</p>
+      </div>
+      <a class="button primary" href="mailto:shivaiyer79@gmail.com?subject=Annual%20Report%20Extractor%20-%20Issue%20or%20Suggestion">Contact Shiva</a>
+    </section>
+
+    <footer class="appFooter">Open-source historical financial statement extraction.</footer>
   </main>
 
   <div id="drawerBackdrop" class="drawerBackdrop hidden" role="presentation">
     <aside class="drawer" role="dialog" aria-modal="true" aria-label="Workbook preview">
       <header class="drawerHeader">
-        <div>
-          <span class="eyebrow">Workbook artifact</span>
-          <h2 id="drawerTitle">Workbook preview</h2>
-        </div>
+        <div><span class="eyebrow">Workbook artifact</span><h2 id="drawerTitle">Workbook preview</h2></div>
         <button id="closeDrawer" class="button secondary" type="button">Close</button>
       </header>
       <div id="previewSummary" class="previewSummary"></div>
       <nav id="tabs" class="tabs" aria-label="Workbook sheets"></nav>
       <div class="tableWrap previewArea">
-        <table class="previewTable">
-          <thead id="previewHead"></thead>
-          <tbody id="previewBody"></tbody>
-        </table>
+        <table class="previewTable"><thead id="previewHead"></thead><tbody id="previewBody"></tbody></table>
       </div>
-      <footer class="drawerFooter">
-        <a id="drawerDownload" class="button primary" href="#" download>Download Excel</a>
-      </footer>
+      <footer class="drawerFooter"><a id="drawerDownload" class="button primary" href="#" download>Download Excel</a></footer>
     </aside>
   </div>
 

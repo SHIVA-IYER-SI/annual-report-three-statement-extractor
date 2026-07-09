@@ -13,9 +13,12 @@ Example: upload five TCS reports and five Tata Capital reports in one batch. The
 - Separate Excel preview and download card for every detected company.
 - **Download all workbooks** as one ZIP.
 - Contact / suggestion button: `shivaiyer79@gmail.com`.
-- **Download your own** button linking back to this GitHub repository.
+- **Get the Source Code** button linking back to this GitHub repository.
 - Simple local instructions in [`RUN_LOCALLY.md`](RUN_LOCALLY.md).
 - Temporary file processing only; no permanent database or cloud-file storage is required.
+- Low-memory sequential processing: one PDF at a time, likely statement pages only, with page-cache cleanup between files.
+- Submit controls stay locked until the job succeeds or fails, preventing accidental duplicate jobs.
+- Full-width application hero plus the quirky **Wake the Numbers** entry screen.
 
 ## Retained workbook contract
 
@@ -45,7 +48,7 @@ The untouched source Block 20A package remains under `reference_original/` for a
 https://annual-report-three-statement-extractor.onrender.com
 ```
 
-4. Put that URL inside `docs/config.js`.
+4. The included `docs/config.js` is already set to the current Render URL. Change it only if the service URL changes.
 5. In GitHub repository settings, enable Pages from branch `main` and folder `/docs`.
 
 Share the GitHub Pages URL. Visitors press **Wake the Numbers**, wait for the free backend to wake, and then use the upload interface.
@@ -78,7 +81,7 @@ pytest -q
 
 ## Privacy
 
-Uploaded reports and generated workbooks use temporary server storage. They are deleted automatically after `JOB_TTL_MINUTES`—60 minutes by default—or immediately through **Delete uploaded files and outputs now**. They are never committed to GitHub.
+Uploaded reports and generated workbooks use temporary server storage. PDFs are processed sequentially, likely statement pages are selected before table extraction, and page caches are released between files to reduce memory use on small hosts. They are deleted automatically after `JOB_TTL_MINUTES`—60 minutes by default—or immediately through **Delete uploaded files and outputs now**. They are never committed to GitHub.
 
 ## Extraction boundary
 
@@ -98,3 +101,7 @@ This is a deterministic baseline, not a guarantee that every annual-report layou
 - `DELETE /api/jobs/{job_id}`
 
 Interactive API documentation is available at `/api/docs`.
+
+## Free-host note
+
+The code is optimized for small instances, but a free Render service still has strict CPU and memory limits. Ten very large or image-heavy 250 MB PDFs are not guaranteed to finish on the free plan. Native-text annual reports with normal file sizes are the intended free-host workload; local execution remains the most reliable option for unusually heavy batches.

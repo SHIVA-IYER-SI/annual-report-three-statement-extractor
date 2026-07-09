@@ -19,7 +19,7 @@ manager = JobManager()
 
 app = FastAPI(
     title="Annual Report Three-Statement Extractor",
-    version="2.0.0",
+    version="3.0.0",
     docs_url="/api/docs",
     redoc_url=None,
 )

@@ -5,9 +5,91 @@ let currentArtifactId = null;
 let activeSheet = "INCOME STATEMENT";
 let pollTimer = null;
 let blueprintData = null;
+let jobRunning = false;
+let appInitialized = false;
+const processingStatuses = new Set(["UPLOADING", "QUEUED", "PROCESSING"]);
 const MIN_FILES = 1;
 const MAX_FILES = 10;
 const MAX_FILE_BYTES = 250 * 1024 * 1024;
+
+
+function setFormLocked(locked, label) {
+  const form = $("#extractionForm");
+  const button = $("#submitButton");
+  jobRunning = locked;
+  form.classList.toggle("formLocked", locked);
+  [$("#files"), $("#scope"), $("#fallbackUnit")].forEach((element) => {
+    if (element) element.disabled = locked;
+  });
+  button.disabled = locked;
+  button.textContent = label || (locked ? "Preparing Historical Financials…" : "Prepare Historical Financials");
+}
+
+function initializeApplication() {
+  if (appInitialized) return;
+  appInitialized = true;
+  loadBlueprint();
+  restoreJob();
+}
+
+function enterApplication() {
+  document.body.classList.remove("splashOpen");
+  $("#splashScreen").classList.add("hidden");
+  $("#appShell").classList.remove("hidden");
+  initializeApplication();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function setupSplash() {
+  const splash = $("#splashScreen");
+  const button = $("#wakeButton");
+  if (!splash || !button) {
+    initializeApplication();
+    return;
+  }
+  document.body.classList.add("splashOpen");
+  const query = new URLSearchParams(window.location.search);
+  if (query.get("from") === "wake-the-numbers" || query.get("app") === "1") {
+    enterApplication();
+    return;
+  }
+  const messages = [
+    "Waking the accountants…",
+    "Looking for the depreciation note…",
+    "Convincing EBITDA it is not cash flow…",
+    "Checking whether the footnotes have alibis…",
+    "Teaching annual reports to speak Excel…",
+  ];
+  button.addEventListener("click", async () => {
+    if (button.disabled) return;
+    button.disabled = true;
+    $("#wakeButtonText").textContent = "Waking Python…";
+    $("#wakeBar").classList.add("active");
+    let index = 0;
+    const timer = setInterval(() => {
+      $("#wakeMessage").textContent = messages[index % messages.length];
+      index += 1;
+    }, 650);
+    try {
+      const response = await fetch(`/api/health?wake=${Date.now()}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || data.status !== "ok") throw new Error("The extractor is not ready yet.");
+      $("#wakeMessage").textContent = "Numbers awake. Opening the extractor…";
+      $("#wakeButtonText").textContent = "Numbers Awake";
+      $("#wakeBar").classList.remove("active");
+      $("#wakeBar").style.width = "100%";
+      setTimeout(enterApplication, 650);
+    } catch (error) {
+      $("#wakeMessage").textContent = error.message || "Python did not answer. Try again.";
+      $("#wakeButtonText").textContent = "Try Waking It Again";
+      $("#wakeBar").classList.remove("active");
+      $("#wakeBar").style.width = "0";
+      button.disabled = false;
+    } finally {
+      clearInterval(timer);
+    }
+  });
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -91,6 +173,7 @@ async function responseData(response) {
 
 $("#extractionForm").addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (jobRunning) return;
   clearInterval(pollTimer);
   const files = Array.from($("#files").files || []);
   const fileError = validateFiles(files);
@@ -99,8 +182,7 @@ $("#extractionForm").addEventListener("submit", async (event) => {
     return;
   }
   const button = $("#submitButton");
-  button.disabled = true;
-  button.textContent = `Uploading 0 / ${files.length}`;
+  setFormLocked(true, `Uploading 0 / ${files.length}`);
   $("#resultSection").classList.add("hidden");
   $("#statusSection").classList.remove("hidden");
   $("#errorBox").classList.add("hidden");
@@ -143,9 +225,7 @@ $("#extractionForm").addEventListener("submit", async (event) => {
       currentJobId = null;
     }
     showError(error.message || "Upload failed");
-  } finally {
-    button.disabled = false;
-    button.textContent = "Analyze annual reports";
+    setFormLocked(false, "Prepare Historical Financials");
   }
 });
 
@@ -158,17 +238,19 @@ async function pollJob() {
     renderStatus(data);
     if (["READY", "REVIEW_REQUIRED", "FAILED"].includes(data.status)) {
       clearInterval(pollTimer);
+      setFormLocked(false, "Prepare Another Batch");
       if (data.result) renderBatchResult(data);
       if (data.status === "FAILED" && !data.result) showError(data.error?.message || "Extraction failed");
     }
   } catch (error) {
     clearInterval(pollTimer);
-    showError(error.message || "Status check failed");
+    showError(`${error.message || "Status check failed"} Refresh the page to reconnect to the existing job; do not start another upload yet.`);
   }
 }
 
 function renderStatus(data) {
   $("#statusSection").classList.remove("hidden");
+  if (processingStatuses.has(data.status)) setFormLocked(true, "Preparing Historical Financials…");
   const titles = {
     READY: "Company workbooks generated",
     REVIEW_REQUIRED: "Workbooks generated — review required",
@@ -391,6 +473,7 @@ $("#deleteButton").addEventListener("click", async () => {
   $("#statusSection").classList.add("hidden");
   $("#extractionForm").reset();
   $("#fileList").innerHTML = "";
+  setFormLocked(false, "Prepare Historical Financials");
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
@@ -403,12 +486,18 @@ async function restoreJob() {
     const data = await response.json();
     currentJobId = saved;
     renderStatus(data);
-    if (data.result && ["READY", "REVIEW_REQUIRED", "FAILED"].includes(data.status)) renderBatchResult(data);
-    else if (data.status !== "FAILED") pollTimer = setInterval(pollJob, 1500);
+    if (data.result && ["READY", "REVIEW_REQUIRED", "FAILED"].includes(data.status)) {
+      setFormLocked(false, "Prepare Another Batch");
+      renderBatchResult(data);
+    } else if (data.status !== "FAILED") {
+      setFormLocked(true, "Preparing Historical Financials…");
+      pollTimer = setInterval(pollJob, 1500);
+    } else {
+      setFormLocked(false, "Prepare Historical Financials");
+    }
   } catch {
     localStorage.removeItem("annualReportExtractorJob");
   }
 }
 
-loadBlueprint();
-restoreJob();
+setupSplash();
